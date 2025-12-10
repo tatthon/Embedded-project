@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Plant Monitor (Auto Control)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #4CAF50; /* Green */
+            --secondary-color: #007bff; /* Blue */
+            --bg-color: #f0f4f8; /* Light background */
+            --card-bg: #ffffff;
+            --low-color: #ffc107; /* Warning yellow */
+            --high-color: #dc3545; /* Danger red */
+            --normal-color: #28a745; /* Success green */
+        }
+        
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            margin: 0; 
+            padding: 20px;
+            background-color: var(--bg-color); 
+            color: #333; 
+        }
+        .container { 
+            max-width: 800px; /* เพิ่มความกว้าง */
+            margin: 40px auto; 
+            background: none; 
+            padding: 0;
+        }
+        h1 { 
+            text-align: center; 
+            color: var(--primary-color); 
+            font-weight: 700;
+            margin-bottom: 30px;
+        }
+
+        /* --- CARD LAYOUT --- */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Responsive columns */
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .data-card { 
+            background: var(--card-bg); 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1); /* Soft shadow */
+            transition: transform 0.2s;
+        }
+        .data-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-header {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #555;
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .card-header i {
+            margin-right: 10px;
+            color: var(--secondary-color);
+        }
+
+        .main-value {
+            font-size: 2.5em; /* เน้นค่าหลัก */
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        /* --- STATUS BADGE --- */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-badge.low { background-color: var(--low-color); color: #333; }
+        .status-badge.high { background-color: var(--high-color); color: white; }
+        .status-badge.normal { background-color: var(--normal-color); color: white; }
+        .status-badge.on { background-color: var(--normal-color); color: white; }
+        .status-badge.off { background-color: var(--high-color); color: white; }
+        
+        /* --- PUMP BOX --- */
+        #pump-control {
+            background-color: #ffffff;
+            text-align: center;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+        #pump-control h2 {
+            color: var(--secondary-color);
+            margin-top: 0;
+            font-size: 1.4em;
+        }
+        #pump-status-display {
+            font-size: 1.8em;
+            font-weight: 700;
+            margin-top: 15px;
+        }
+        #pump-status-display .status-badge {
+            padding: 8px 20px;
+            font-size: 1em;
+        }
+
+    </style>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <h1>Smart Plant Monitoring System</h1>
+
+    <div class="grid-container">
+        <div class="data-card">
+            <div class="card-header"><i class="fas fa-thermometer-half"></i>อุณหภูมิอากาศ</div>
+            <div class="main-value"><span id="temp-value">...</span></div>
+            <p>สถานะ: <span id="temp-status">...</span></p>
+        </div>
+
+        <div class="data-card">
+            <div class="card-header"><i class="fas fa-tint"></i>ความชื้นอากาศ</div>
+            <div class="main-value"><span id="humid-value">...</span></div>
+            <p>สถานะ: <span id="humid-status">...</span></p>
+        </div>
+
+        <div class="data-card">
+            <div class="card-header"><i class="fas fa-seedling"></i>ความชื้นดิน (Soil)</div>
+            <div class="main-value"><span id="soil-value">...</span></div>
+            <p>สถานะ: <span id="soil-status">...</span></p>
+        </div>
+
+        <div class="data-card">
+            <div class="card-header"><i class="fas fa-water"></i>ระดับน้ำ (Tank)</div>
+            <div class="main-value"><span id="water-value">...</span></div>
+            <p>สถานะ: <span id="water-status">...</span></p>
+        </div>
+    </div>
+    
+    <div id="pump-control">
+        <h2>รดน้ำ!!!</h2>
+        <div id="pump-status-display">สถานะ: <span id="pump-status-badge">...</span></div>
+    </div>
+</div>
+
+<script>
+    // ----------------------------------------------------------------------------------
+    // 1. กำหนดค่า Firebase (แทนที่ด้วยข้อมูลโปรเจกต์ของคุณ)
+    // ----------------------------------------------------------------------------------
+    var firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        databaseURL: "https://watering-plant-2c69b-default-rtdb.asia-southeast1.firebasedatabase.app", 
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.appspot.com",
+        messagingSenderId: "...",
+        appId: "..."
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    var database = firebase.database();
+
+    // ----------------------------------------------------------------------------------
+    // 2. ฟังก์ชันช่วยในการแสดงสถานะเป็น Badge
+    // ----------------------------------------------------------------------------------
+    function updateStatusBadge(elementId, value, unit, status) {
+        const valueEl = document.getElementById(elementId);
+        const statusEl = document.getElementById(elementId.replace('-value', '-status'));
+        
+        // 1. Update Value
+        valueEl.innerText = value + (unit ? ' ' + unit : '');
+
+        // 2. Update Status Badge
+        let statusClass = status.toLowerCase();
+        if (statusClass === 'low') statusClass = 'low';
+        else if (statusClass === 'high') statusClass = 'high';
+        else statusClass = 'normal';
+
+        statusEl.innerHTML = `<span class="status-badge ${statusClass}">${status}</span>`;
+    }
+
+    // ----------------------------------------------------------------------------------
+    // 3. ดึงข้อมูล Real-time (Read)
+    // ----------------------------------------------------------------------------------
+
+    var dbRef = database.ref();
+
+    dbRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        
+        if (!data) return; // ป้องกันข้อมูลว่างเปล่า
+
+        // อุณหภูมิ
+        updateStatusBadge('temp-value', data.temperature.value, '°C', data.temperature.status);
+        
+        // ความชื้นอากาศ
+        updateStatusBadge('humid-value', data.humidity.value, '%', data.humidity.status);
+
+        // ความชื้นดิน (แสดงค่า ADC)
+        updateStatusBadge('soil-value', data["soil-moisture"].value, 'ADC', data["soil-moisture"].status);
+        
+        // ระดับน้ำ (แสดงค่า ADC)
+        updateStatusBadge('water-value', data["water-level"].value, 'ADC', data["water-level"].status);
+
+        // สถานะปั๊ม (ดึงจาก 'pump/status' ที่ NodeMCU เขียน)
+        const pumpState = data.pump.status;
+        const pumpBadgeEl = document.getElementById('pump-status-badge');
+        
+        if (pumpState == 1) {
+            pumpBadgeEl.innerHTML = `<span class="status-badge on">PUMP IS ON</span>`;
+        } else {
+            pumpBadgeEl.innerHTML = `<span class="status-badge off">PUMP IS OFF</span>`;
+        }
+    });
+</script>
+</body>
+</html>
