@@ -143,12 +143,6 @@
             <div class="main-value"><span id="soil-value">...</span></div>
             <p>สถานะ: <span id="soil-status">...</span></p>
         </div>
-
-        <div class="data-card">
-            <div class="card-header"><i class="fas fa-water"></i>ระดับน้ำ (Tank)</div>
-            <div class="main-value"><span id="water-value">...</span></div>
-            <p>สถานะ: <span id="water-status">...</span></p>
-        </div>
     </div>
     
     <div id="pump-control">
@@ -162,13 +156,14 @@
     // 1. กำหนดค่า Firebase (แทนที่ด้วยข้อมูลโปรเจกต์ของคุณ)
     // ----------------------------------------------------------------------------------
     var firebaseConfig = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-        databaseURL: "https://watering-plant-2c69b-default-rtdb.asia-southeast1.firebasedatabase.app", 
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT_ID.appspot.com",
-        messagingSenderId: "...",
-        appId: "..."
+    apiKey: "AIzaSyCftk72k3Jfn9PO3wSVrPpfhzRwuWvq6Zo",
+    authDomain: "embbedproject-bdd4f.firebaseapp.com",
+    databaseURL: "https://embbedproject-bdd4f-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "embbedproject-bdd4f",
+    storageBucket: "embbedproject-bdd4f.firebasestorage.app",
+    messagingSenderId: "672843290348",
+    appId: "1:672843290348:web:ddd0a909c17f542cf4f7c9",
+    measurementId: "G-K5WLGC3246"
     };
 
     // Initialize Firebase
@@ -179,19 +174,28 @@
     // 2. ฟังก์ชันช่วยในการแสดงสถานะเป็น Badge
     // ----------------------------------------------------------------------------------
     function updateStatusBadge(elementId, value, unit, status) {
-        const valueEl = document.getElementById(elementId);
-        const statusEl = document.getElementById(elementId.replace('-value', '-status'));
-        
-        // 1. Update Value
-        valueEl.innerText = value + (unit ? ' ' + unit : '');
+        try {
+            const valueEl = document.getElementById(elementId);
+            const statusEl = document.getElementById(elementId.replace('-value', '-status'));
+            
+            if (!valueEl || !statusEl) {
+                console.warn(`⚠️ Element not found: ${elementId}`);
+                return;
+            }
+            
+            // 1. Update Value
+            valueEl.innerText = value + (unit ? ' ' + unit : '');
 
-        // 2. Update Status Badge
-        let statusClass = status.toLowerCase();
-        if (statusClass === 'low') statusClass = 'low';
-        else if (statusClass === 'high') statusClass = 'high';
-        else statusClass = 'normal';
+            // 2. Update Status Badge
+            let statusClass = status.toLowerCase();
+            if (statusClass === 'low') statusClass = 'low';
+            else if (statusClass === 'high') statusClass = 'high';
+            else statusClass = 'normal';
 
-        statusEl.innerHTML = `<span class="status-badge ${statusClass}">${status}</span>`;
+            statusEl.innerHTML = `<span class="status-badge ${statusClass}">${status}</span>`;
+        } catch (error) {
+            console.error("❌ Error updating status badge:", error);
+        }
     }
 
     // ----------------------------------------------------------------------------------
@@ -201,31 +205,68 @@
     var dbRef = database.ref();
 
     dbRef.on('value', (snapshot) => {
-        const data = snapshot.val();
-        
-        if (!data) return; // ป้องกันข้อมูลว่างเปล่า
+        try {
+            const data = snapshot.val();
+            console.log("📊 Full Data from Firebase:", data);
+            
+            if (!data) {
+                console.warn("⚠️ No data in Firebase database");
+                return;
+            }
 
-        // อุณหภูมิ
-        updateStatusBadge('temp-value', data.temperature.value, '°C', data.temperature.status);
-        
-        // ความชื้นอากาศ
-        updateStatusBadge('humid-value', data.humidity.value, '%', data.humidity.status);
+            // ดึงข้อมูลจาก smart-farm object
+            const smartFarmData = data["smart-farm"];
+            console.log("📊 Smart Farm Data:", smartFarmData);
+            
+            if (!smartFarmData) {
+                console.warn("⚠️ No smart-farm data found");
+                return;
+            }
 
-        // ความชื้นดิน (แสดงค่า ADC)
-        updateStatusBadge('soil-value', data["soil-moisture"].value, 'ADC', data["soil-moisture"].status);
-        
-        // ระดับน้ำ (แสดงค่า ADC)
-        updateStatusBadge('water-value', data["water-level"].value, 'ADC', data["water-level"].status);
+            // อุณหภูมิ
+            if (smartFarmData.temperature !== undefined) {
+                updateStatusBadge('temp-value', Number(smartFarmData.temperature).toFixed(2), '°C', 'normal');
+            } else {
+                console.warn("⚠️ Missing temperature data");
+                document.getElementById('temp-value').innerText = 'N/A';
+            }
+            
+            // ความชื้นอากาศ
+            if (smartFarmData.humidity !== undefined) {
+                updateStatusBadge('humid-value', Number(smartFarmData.humidity).toFixed(2), '%', 'normal');
+            } else {
+                console.warn("⚠️ Missing humidity data");
+                document.getElementById('humid-value').innerText = 'N/A';
+            }
 
-        // สถานะปั๊ม (ดึงจาก 'pump/status' ที่ NodeMCU เขียน)
-        const pumpState = data.pump.status;
-        const pumpBadgeEl = document.getElementById('pump-status-badge');
-        
-        if (pumpState == 1) {
-            pumpBadgeEl.innerHTML = `<span class="status-badge on">PUMP IS ON</span>`;
-        } else {
-            pumpBadgeEl.innerHTML = `<span class="status-badge off">PUMP IS OFF</span>`;
+            // ความชื้นดิน (แสดงค่า ADC)
+            if (smartFarmData["soil-moisture"] !== undefined) {
+                updateStatusBadge('soil-value', Math.round(smartFarmData["soil-moisture"]), 'ADC', 'normal');
+            } else {
+                console.warn("⚠️ Missing soil-moisture data");
+                document.getElementById('soil-value').innerText = 'N/A';
+            }
+            
+            // สถานะปั๊ม
+            if (smartFarmData["pump-status"] !== undefined) {
+                const pumpState = smartFarmData["pump-status"];
+                const pumpBadgeEl = document.getElementById('pump-status-badge');
+                
+                if (pumpState == 1 || pumpState === 'ON' || pumpState === 'on') {
+                    pumpBadgeEl.innerHTML = `<span class="status-badge on">PUMP</span>`;
+                } else {
+                    pumpBadgeEl.innerHTML = `<span class="status-badge off">ไม่ต้องPUMP</span>`;
+                }
+                console.log("🚰 Pump Status:", pumpState);
+            } else {
+                console.warn("⚠️ Missing pump-status data");
+                document.getElementById('pump-status-badge').innerHTML = `<span class="status-badge off">N/A</span>`;
+            }
+        } catch (error) {
+            console.error("❌ Firebase error:", error);
         }
+    }, (error) => {
+        console.error("❌ Database read error:", error.code, error.message);
     });
 </script>
 </body>
